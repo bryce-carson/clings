@@ -1,10 +1,10 @@
 CC = gcc
 CFLAGS = -g -Wall -Wextra -Werror -I./include
 
-SRCS = src/main.c src/files.c src/utils.c src/runna.c src/exercise.c src/display.c
+SRCS = src/klingons.c
 OBJS = $(SRCS:src/%.c=obj/%.o)
 
-TARGET = clings
+TARGET = klingons
 
 all: $(TARGET)
 

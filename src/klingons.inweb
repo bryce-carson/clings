@@ -1,0 +1,978 @@
+Title: klingons
+Author: Bryce Carson
+Purpose: The purpose of klingons, a fork of klingons, is to give me a useful base program to hack on until I really "get C." It also offers me a chance to learn yet another literate programming system, one that specifically groans about reinventing the wheel, but not so much as Noweb did when it refused to abandon ye olde UNIX® way of pipes and small, dedicated tooling pieced together to make something emergent and new.
+Language: C
+
+@
+@<klingons logogram@> =
+"2J1;32m\n"
+"██╗  ██╗██╗     ██╗███╗   ██╗ ██████╗  ██████╗ ███╗   ██╗███████╗\n"
+"██║ ██╔╝██║     ██║████╗  ██║██╔════╝ ██╔═══██╗████╗  ██║██╔════╝\n"
+"█████╔╝ ██║     ██║██╔██╗ ██║██║  ███╗██║   ██║██╔██╗ ██║███████╗\n"
+"██╔═██╗ ██║     ██║██║╚██╗██║██║   ██║██║   ██║██║╚██╗██║╚════██║\n"
+"██║  ██╗███████╗██║██║ ╚████║╚██████╔╝╚██████╔╝██║ ╚████║███████║\n"
+"╚═╝  ╚═╝╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝\n\n"
+
+@h Inclusions
+
+These are the headers which are needed by this web. First the non-standard
+header files are given, which exist in the |include| directory until they are
+integrated into this web directly.
+
+=
+#include "termcolor-c.h"
+
+#include <dirent.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
+@<includes@> Predeclaration of identifiers for ANSI C
+
+ANSI C requires that identifiers be predeclared before their first usage in a
+file. This leads to a large amount of "header". I prefer headless files, which
+exist without headers and don't use a massive interconnected chain of |include|
+preprocessor directives. I like to define something a single time. Inweb
+benefits me in that it provides for avoiding predeclaration, but I won't use
+that utility yet. I'll only use Inweb's "paragraphing" feature (chunks or
+modules if you're coming from Noweb or CWEB) to predeclare identifiers a single
+time.
+
+@d BIN_PATH "./bin"
+
+=
+void delay(int seconds);
+
+int exec_cmd(char *command);
+int exec_cmd_output(char *command);
+
+/// compiles C file at path given with output and returns exit code
+int exec_compile_output(File failed_file);
+/// compiles C file at path given with no output and returns exit code
+int exec_compile(char *file_path, char *file_name_no_ext);
+
+/// executes binary at a default location "./bin" expecting no file extension with command output and returns exit code
+int exec_run_output(File failed_file);
+/// executes binary at a default location "./bin" expecting no file extension with no output and returns exit code
+int exec_run(char *file_name_no_ext);
+
+int exec_clear_bin();
+
+typedef enum {
+    EXERCISE,
+    README
+} FileType;
+
+typedef struct {
+    char *file_path;
+    char *file_name;
+    char *file_name_no_ext;
+    char *parent_dir_path;
+    char *file_contents;
+    bool file_diff;
+    bool marked_incomplete;
+    FileType file_type;
+} File;
+
+typedef struct {
+    File *files;
+    size_t file_ct;
+} FileCollection;
+
+/// This assumes that any path does not contain any dividers
+/// *base_path = "../" or "./" or "/" if needed, otherwise pass ""
+char *build_file_path(char **paths, int size, char *base_path);
+char *read_file_contents(char *file_path);
+void add_dir(FileCollection **dirs, File *files, int file_ct, int dir_idx);
+int load_files(FileCollection **dirs);
+bool is_marked_incomplete(char *file_contents, int file_contents_size);
+int alphasort(const struct dirent **a, const struct dirent **b);
+
+typedef struct {
+    char* readme;
+    FileCollection* exercise_files;
+} Exercise;
+
+Exercise *create_exercise(FileCollection *files);
+char* get_readme(FileCollection *dir);
+FileCollection* get_exercises(FileCollection *dir);
+
+/* NOTE: used as the index into failure_function[]. */
+typedef enum {
+    RUNTIME,
+    COMPILATION,
+    NONE,
+} FailureMode;
+
+typedef struct {
+    FailureMode failure_mode;
+    bool marked_incomplete;
+    int failing_file;
+    int total_files;
+} ExecutionState;
+
+typedef enum {
+    FAILURE,
+    MARKED_INCOMPLETE,
+    COMPLETE,
+} DisplayMode;
+
+void display(Exercise *exercise, ExecutionState *state, DisplayMode display_mode);
+void display_debug(Exercise *exercise);
+void display_failure(Exercise *exercise, ExecutionState *state);
+void display_success();
+void display_marked_incomplete(Exercise *exercise, ExecutionState *state);
+void display_progress(int current_exercise, int total_exercises);
+
+@h Mainland programming
+|TOTAL_EXERCISES_DIRS| was formerly defined as the integer constant three, but I
+ didn't see why this needed to be.
+
+=
+int TOTAL_EXERCISES_DIRS;
+static volatile sig_atomic_t keep_running = 1;
+
+void exec_exercise(Exercise *exercise, ExecutionState *state);
+FailureMode find_failure_mode(char *file_path, char *file_name_no_ext);
+bool is_file_diff(Exercise *exercise);
+
+static void sig_handler(int _);
+void print_usage();
+int count_dir(char *dir);
+
+int main(int argc, char *argv[]) {
+    signal(SIGINT, sig_handler);
+
+    TOTAL_EXERCISES_DIRS = count_dir("./exercises");
+    if (TOTAL_EXERCISES_DIRS == -1) {
+        return 1;
+    }
+
+    int start_at = 1;
+    int c;
+
+    opterr = 0;
+
+    while ((c = getopt(argc, argv, "s:")) != -1) {
+        switch (c) {
+        case 's':
+            start_at = atoi(optarg);
+
+            if (start_at > TOTAL_EXERCISES_DIRS || start_at < 1) {
+                printf("error: cannot start at %d (max. exercises: %d)\n",
+                       start_at, TOTAL_EXERCISES_DIRS);
+                return EXIT_FAILURE;
+            }
+            printf("Starting at exercise %d ...\n", start_at);
+
+            delay(2);
+            break;
+        default:
+            print_usage();
+            return EXIT_SUCCESS;
+        }
+    }
+
+    int rerun_all = true;
+    ExecutionState exercise_state;
+    exercise_state.failure_mode = NONE;
+    exercise_state.failing_file = -1;
+    exercise_state.total_files = -1;
+
+    FileCollection **dirs =
+        malloc(TOTAL_EXERCISES_DIRS * sizeof(FileCollection *));
+    if (dirs == NULL) {
+        perror("Failed allocate memory for dirs");
+        exit(1);
+    }
+
+    for (int i = 0; i < TOTAL_EXERCISES_DIRS; i++) {
+        dirs[i] = NULL;
+    }
+
+    while (keep_running) {
+        delay(1);
+
+        int exercise_file_ct = load_files(dirs);
+        exercise_state.total_files = exercise_file_ct;
+
+        for (int d = (start_at - 1); d < TOTAL_EXERCISES_DIRS; d++) {
+            Exercise *exercise = create_exercise(dirs[d]);
+            bool file_diff = is_file_diff(exercise);
+
+#ifdef DEBUG
+            display_debug(&exercise);
+            continue;
+#endif
+
+            if (rerun_all == true) {
+                exec_exercise(exercise, &exercise_state);
+
+                if (exercise_state.failure_mode != NONE) {
+                    display(exercise, &exercise_state, FAILURE);
+                    rerun_all = false;
+                    goto clean_exercise;
+                }
+
+                if (exercise_state.failure_mode == NONE &&
+                    exercise_state.marked_incomplete == true) {
+                    display(exercise, &exercise_state, MARKED_INCOMPLETE);
+                    rerun_all = false;
+                    goto clean_exercise;
+                }
+
+                // end of exercises, no failures
+                if (d == TOTAL_EXERCISES_DIRS - 1) {
+                    display(exercise, &exercise_state, COMPLETE);
+                    rerun_all = false;
+                }
+            }
+
+            if (file_diff == true) {
+                exec_exercise(exercise, &exercise_state);
+
+                if (exercise_state.failure_mode != NONE) {
+                    display(exercise, &exercise_state, FAILURE);
+                    rerun_all = false;
+                    goto clean_exercise;
+                }
+
+                if (exercise_state.failure_mode == NONE &&
+                    exercise_state.marked_incomplete == true) {
+                    display(exercise, &exercise_state, MARKED_INCOMPLETE);
+                    rerun_all = false;
+                    goto clean_exercise;
+                }
+
+                if (exercise_state.failure_mode == NONE &&
+                    exercise_state.marked_incomplete == false) {
+                    rerun_all = true;
+                }
+            }
+
+        clean_exercise:
+            free(exercise->exercise_files->files);
+            free(exercise->exercise_files);
+            free(exercise);
+        }
+    }
+
+    for (int di = 0; di < TOTAL_EXERCISES_DIRS; di++) {
+        if (dirs[di]) {
+            for (size_t e = 0; e < dirs[di]->file_ct; e++) {
+                free(dirs[di]->files[e].file_path);
+                free(dirs[di]->files[e].file_name);
+                free(dirs[di]->files[e].file_name_no_ext);
+                free(dirs[di]->files[e].parent_dir_path);
+                free(dirs[di]->files[e].file_contents);
+            }
+            free(dirs[di]->files);
+            free(dirs[di]);
+        }
+    }
+
+    free(dirs);
+
+    return 0;
+}
+
+void exec_exercise(Exercise *exercise, ExecutionState *exercise_state) {
+    int file_ct = exercise->exercise_files->file_ct;
+    File *files = exercise->exercise_files->files;
+
+    for (int e = 0; e < file_ct; e++) {
+        File file = files[e];
+        char *file_name_no_ext = file.file_name_no_ext;
+        char *file_path = file.file_path;
+
+        FailureMode failure_mode =
+            find_failure_mode(file_path, file_name_no_ext);
+        exercise_state->failure_mode = failure_mode;
+        exercise_state->marked_incomplete = file.marked_incomplete;
+        exercise_state->failing_file = e;
+
+        if (failure_mode != NONE || file.marked_incomplete == true) {
+            return;
+        }
+    }
+
+    exercise_state->failure_mode = NONE;
+    exercise_state->marked_incomplete = false;
+    exercise_state->failing_file = -1;
+}
+
+FailureMode find_failure_mode(char *file_path, char *file_name_no_ext) {
+    if (exec_compile(file_path, file_name_no_ext) != 0) return COMPILATION;
+    if (exec_run(file_name_no_ext) != 0) return RUNTIME;
+    return NONE;
+}
+
+bool is_file_diff(Exercise *exercise) {
+    int file_ct = exercise->exercise_files->file_ct;
+    File *files = exercise->exercise_files->files;
+    bool is_file_diff = false;
+
+    for (int e = 0; e < file_ct; e++) {
+        File file = files[e];
+        bool file_diff = file.file_diff;
+        if (file_diff == true) {
+            is_file_diff = true;
+            break;
+        }
+    }
+
+    return is_file_diff;
+}
+
+static void sig_handler(int _) {
+    (void)_;
+    keep_running = 0;
+}
+
+int count_dir(char *dir) {
+    struct dirent *dp;
+    DIR *fd;
+
+    int dir_count = 0;
+
+    if ((fd = opendir(dir)) == NULL) {
+        fprintf(stderr, "count_dir: can't open %s\n", dir);
+        return -1;
+    }
+    while ((dp = readdir(fd)) != NULL) {
+        if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
+            continue; /* skip self and parent */
+        dir_count++;
+    }
+    closedir(fd);
+
+    return dir_count;
+}
+
+void print_usage() {
+    printf("Usage:\n\n"
+           "-s N\tStart at exercise N (between 1 and %d)"
+           "\n",
+           TOTAL_EXERCISES_DIRS);
+}
+
+@<runna@>=
+const int MAX_LINES = 500;
+int exec_cmd(char *command) {
+  FILE *fp;
+  int status;
+
+  fp = popen(command, "w");
+  if (fp == NULL) {
+    perror("Failed to execution popen command");
+    exit(1);
+  }
+
+  status = pclose(fp);
+  if (status == -1) {
+    perror("Failed to close");
+    exit(1);
+  }
+
+  if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+
+  return -1;
+}
+
+int exec_cmd_output(char *command) {
+  FILE *fp;
+  int status;
+  char path[MAX_LINES];
+
+  fp = popen(command, "w");
+  if (fp == NULL) {
+    perror("Failed to execution popen command");
+    exit(1);
+  }
+
+  while (fgets(path, MAX_LINES, fp) != NULL)
+    printf("%s", path);
+
+  status = pclose(fp);
+  if (status == -1) {
+    perror("Failed to close");
+    exit(1);
+  }
+
+  if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+
+  return -1;
+}
+
+int exec_compile_output(File failed_file) {
+    int path_len = strlen(failed_file.file_path);
+    int file_name_len = strlen(failed_file.file_name_no_ext);
+    int buff_size = path_len + file_name_len + 48; // 35 is for gcc flags and other stuff
+
+    // check for BIN_PATH
+    DIR* dir = opendir(BIN_PATH);
+    if (dir) {
+        // BIN_PATH already exists
+        closedir(dir);
+    } else if (ENOENT == errno) {
+        // need to make BIN_PATH
+        mkdir(BIN_PATH, 0700);
+    } else {
+        perror("probing BIN_PATH failed");
+    }
+
+    // create snprintf buffer
+    char *compile_cmd = malloc(buff_size);
+    snprintf(compile_cmd, buff_size, "gcc %s -o %s/%s -lm", failed_file.file_path, BIN_PATH, failed_file.file_name_no_ext);
+
+    int res_code = exec_cmd_output(compile_cmd);
+
+  free(compile_cmd);
+  return res_code;
+}
+
+int exec_run_output(File failed_file) {
+  int file_path_size = strlen(failed_file.file_name_no_ext) + 7;
+  char *file_path = malloc(file_path_size); // add 5 for binary path
+  snprintf(file_path, file_path_size, "%s/%s", BIN_PATH, failed_file.file_name_no_ext);
+    int res_code = exec_cmd_output(file_path);
+
+  free(file_path);
+  return res_code;
+}
+
+int exec_compile(char *file_path, char *file_name_no_ext) {
+    int path_len = strlen(file_path);
+    int file_name_len = strlen(file_name_no_ext);
+    int buff_size = path_len + file_name_len + 48; // 35 is for gcc flags and other stuff
+
+    // check for BIN_PATH
+    DIR* dir = opendir(BIN_PATH);
+    if (dir) {
+        // BIN_PATH already exists
+        closedir(dir);
+    } else if (ENOENT == errno) {
+        // need to make BIN_PATH
+        mkdir(BIN_PATH, 0700);
+    } else {
+        perror("probing BIN_PATH failed");
+    }
+
+    // create snprintf buffer
+    char *compile_cmd = malloc(buff_size);
+    // snprintf(compile_cmd, buff_size, "gcc %s -o %s/%s -Wall -Wextra -Werror", file_path, BIN_PATH ,file_name_no_ext);
+    snprintf(compile_cmd, buff_size, "gcc %s -o %s/%s -lm", file_path, BIN_PATH, file_name_no_ext);
+
+    printf("compile statement: %s \n", compile_cmd);
+    int res_code = exec_cmd(compile_cmd);
+
+    free(compile_cmd);
+    return res_code;
+}
+
+int exec_run(char *file_name_no_ext) {
+  int file_path_size = strlen(file_name_no_ext) + 7;
+  char *file_path = malloc(file_path_size); // add 5 for binary path
+  snprintf(file_path, file_path_size, "%s/%s", BIN_PATH, file_name_no_ext);
+    int res_code = exec_cmd(file_path);
+
+  free(file_path);
+  return res_code;
+}
+
+int exec_clear_bin() {
+  char *command = malloc(14); // add 5 for binary path
+  snprintf(command, 14, "rm -r %s/*", BIN_PATH);
+    int res_code = exec_cmd(command);
+
+  free(command);
+  return res_code;
+}
+
+@<utils@>=
+
+void delay(int seconds) {
+    int m_secs = 1000000 * seconds;
+    clock_t start_time = clock();
+
+    while (clock() < start_time + m_secs) {};
+}
+
+@<files@>Files and their conception within klingons
+This portion of the web defines a type |File| and |FileCollection| which is
+tailored to the specific needs of klingons.
+=
+const char DIR_PATH[] = "./exercises";
+const int DIR_TYPE_CODE = 4;
+const int FILE_TYPE_CODE = 8;
+const char README_FILE_NM[] = "README.md";
+
+/// This assumes that any path does not contain any dividers
+/// *base_path = "../" or "./" or "/" if needed, otherwise pass ""
+char *build_file_path(char **paths, int size, char *base_path) {
+    // calculate the total length needed for the concatenated path
+    int str_len = strlen(base_path) + 1;
+    for (int i = 0; i < size; i++) {
+        str_len += strlen(paths[i]) + 1;
+    }
+
+    char *str_buff = malloc(str_len);
+    if (str_buff == NULL) {
+        printf("concat_path_dyn malloc failed");
+        exit(1);
+    }
+
+    // initialize the buffer with base_path
+    strcpy(str_buff, base_path);
+
+    for (int i = 0; i < size; i++) {
+        strcat(str_buff, paths[i]);
+        if (i < size - 1) {
+            strcat(str_buff, "/");
+        }
+    }
+
+    return str_buff;
+}
+
+char *read_file_contents(char *file_path) {
+    struct stat fstat_buff;
+    FILE *file = fopen(file_path, "r");
+
+    if (file == NULL) {
+        perror("Failed to open file");
+        exit(1);
+    }
+
+    if (fstat(fileno(file), &fstat_buff) == -1) {
+        perror("Failed to get file stats");
+        fclose(file);
+        exit(1);
+    }
+    long file_size = fstat_buff.st_size;
+    char *file_buff = malloc(file_size + 1);
+
+    if (file_buff == NULL) {
+        perror("Failed to allocate memory for reading file");
+        fclose(file);
+        exit(1);
+    }
+
+    fread(file_buff, 1, file_size, file);
+    file_buff[file_size] = '\0';
+    fclose(file);
+
+    return file_buff;
+}
+
+bool is_marked_incompleted(char *file_contents, int file_contents_size) {
+    char x1 = 0xE2, x2 = 0x9D, x3 = 0x8C; // UTF-8 encoding of '❌'
+
+    for (int i = 0; i < file_contents_size - 3; i++) {
+        char c1 = file_contents[i];
+        char c2 = file_contents[i + 1];
+        char c3 = file_contents[i + 2];
+
+        if (c1 == x1 && c2 == x2 && c3 == x3)
+            return true;
+    }
+
+    return false;
+}
+
+void add_dir(FileCollection **dirs, File *files, int file_ct, int dir_idx) {
+
+    // Free dir if not null
+    if (dirs[dir_idx] != NULL) {
+        if (dirs[dir_idx]->files != NULL) {
+            for (size_t e = 0; e < dirs[dir_idx]->file_ct; e++) {
+                free(dirs[dir_idx]->files[e].file_path);
+                free(dirs[dir_idx]->files[e].file_name);
+                free(dirs[dir_idx]->files[e].file_name_no_ext);
+                free(dirs[dir_idx]->files[e].parent_dir_path);
+                free(dirs[dir_idx]->files[e].file_contents);
+            }
+            free(dirs[dir_idx]->files);
+        }
+        free(dirs[dir_idx]);
+    }
+
+    dirs[dir_idx] = malloc(sizeof(FileCollection));
+    if (dirs[dir_idx] == NULL) {
+        perror("Failed to allocate memory for dir");
+        exit(1);
+    }
+
+    dirs[dir_idx]->files = malloc(sizeof(File) * file_ct);
+    if (dirs[dir_idx]->files == NULL) {
+        perror("Failed to allocate memory for files in dir");
+        exit(1);
+    }
+
+    for (int i = 0; i < file_ct; i++) {
+        dirs[dir_idx]->files[i].file_path = strdup(files[i].file_path);
+        dirs[dir_idx]->files[i].file_name = strdup(files[i].file_name);
+        dirs[dir_idx]->files[i].file_name_no_ext =
+            strdup(files[i].file_name_no_ext);
+        dirs[dir_idx]->files[i].parent_dir_path =
+            strdup(files[i].parent_dir_path);
+        dirs[dir_idx]->files[i].file_contents = strdup(files[i].file_contents);
+        dirs[dir_idx]->files[i].file_type = files[i].file_type;
+        dirs[dir_idx]->files[i].marked_incomplete = files[i].marked_incomplete;
+        dirs[dir_idx]->files[i].file_diff = files[i].file_diff;
+    }
+
+    dirs[dir_idx]->file_ct = file_ct;
+}
+
+int alphasort(const struct dirent **a, const struct dirent **b) {
+    return strcasecmp((*a)->d_name, (*b)->d_name);
+}
+
+char *get_filename_no_ext(const char *filename) {
+    char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename)
+        return strdup(filename);
+    size_t len = dot - filename;
+    char *no_ext = malloc(len + 1);
+    if (!no_ext)
+        return NULL;
+    strncpy(no_ext, filename, len);
+    no_ext[len] = '\0';
+    return no_ext;
+}
+
+/// Loops through target directory path and loads files into Directory double
+/// pointer and returns total exercise files
+int load_files(FileCollection **dirs) {
+    struct dirent **nmlist;
+    int ex_dirs_ct = scandir(DIR_PATH, &nmlist, NULL, alphasort);
+
+    if (ex_dirs_ct < 0) {
+        perror("could not open directory");
+        exit(1);
+    }
+
+    int dir_idx = 0;
+    int total_exercise_file_ct = 0;
+
+    for (int di = 0; di < ex_dirs_ct; di++) {
+        struct dirent *de = nmlist[di];
+        int file_type = de->d_type;
+
+        if (file_type != DIR_TYPE_CODE)
+            continue;
+        if (strcmp(de->d_name, "..") == 0 || strcmp(de->d_name, ".") == 0)
+            continue;
+
+        char *paths[] = {(char *)DIR_PATH, de->d_name};
+
+        char *nested_path = build_file_path(paths, 2, "");
+
+        struct dirent **nmlist_nested;
+        int ex_dirs_nested_ct =
+            scandir(nested_path, &nmlist_nested, NULL, alphasort);
+
+        if (ex_dirs_nested_ct < 0) {
+            perror("could not open directory");
+            free(nested_path);
+            exit(1);
+        }
+
+        int file_idx = 0;
+        int exercise_file_ct = 0;
+        File *dir_files = NULL;
+
+        for (int ndi = 0; ndi < ex_dirs_nested_ct; ndi++) {
+            struct dirent *nde = nmlist_nested[ndi];
+            int file_type = nde->d_type;
+            char *file_name = nde->d_name;
+
+            if (file_type == FILE_TYPE_CODE) {
+                char *paths[] = {(char *)DIR_PATH, de->d_name, nde->d_name};
+
+                char *full_path = build_file_path(paths, 3, "");
+                char *file_contents = read_file_contents(full_path);
+                int dir_path_size = strlen(nested_path) + 1;
+                int file_path_size = strlen(full_path) + 1;
+                int file_name_size = strlen(file_name) + 1;
+                int file_contents_size = strlen(file_contents) + 1;
+
+                int file_type =
+                    strcmp(file_name, README_FILE_NM) == 0 ? README : EXERCISE;
+
+                dir_files = realloc(dir_files, (file_idx + 1) * sizeof(File));
+                if (dir_files == NULL) {
+                    perror("failed to reallocate memory for dir_files");
+                    exit(1);
+                }
+
+                dir_files[file_idx].file_type = file_type;
+
+                dir_files[file_idx].file_path = malloc(file_path_size);
+                if (dir_files[file_idx].file_path == NULL) {
+                    perror("failed to allocate memory for file_path");
+                    exit(1);
+                }
+                strcpy(dir_files[file_idx].file_path, full_path);
+
+                dir_files[file_idx].file_name = malloc(file_name_size);
+                if (dir_files[file_idx].file_name == NULL) {
+                    perror("failed to allocate memory for file_name");
+                    exit(1);
+                }
+                strcpy(dir_files[file_idx].file_name, file_name);
+
+                dir_files[file_idx].file_name_no_ext =
+                    get_filename_no_ext(file_name);
+                if (dir_files[file_idx].file_name_no_ext == NULL) {
+                    perror("failed to allocate memory for file_name_no_ext");
+                    exit(1);
+                }
+
+                if (file_type == EXERCISE) {
+                    bool marked_complete = is_marked_incompleted(
+                        file_contents, file_contents_size);
+
+                    dir_files[file_idx].marked_incomplete = marked_complete;
+
+                    exercise_file_ct++;
+                } else if (file_type == README) {
+                    dir_files[file_idx].marked_incomplete = false;
+                } else {
+                    dir_files[file_idx].marked_incomplete = false;
+                }
+
+                dir_files[file_idx].parent_dir_path = malloc(dir_path_size);
+                if (dir_files[file_idx].parent_dir_path == NULL) {
+                    perror("failed to allocate memory for parent_dir_path");
+                    exit(1);
+                }
+                strcpy(dir_files[file_idx].parent_dir_path, nested_path);
+
+                if (dirs != NULL && dirs[dir_idx] != NULL) {
+                    char *old_file_contents =
+                        dirs[dir_idx]->files[file_idx].file_contents;
+
+                    if (strcmp(file_contents, old_file_contents) != 0) {
+                        dir_files[file_idx].file_diff = true;
+                    } else {
+                        dir_files[file_idx].file_diff = false;
+                    }
+                } else {
+                    dir_files[file_idx].file_diff = false;
+                }
+
+                dir_files[file_idx].file_contents = malloc(file_contents_size);
+                if (dir_files[file_idx].file_contents == NULL) {
+                    perror("failed to allocate memory for file_contents");
+                    exit(1);
+                }
+                strcpy(dir_files[file_idx].file_contents, file_contents);
+
+                file_idx++;
+
+                free(full_path);
+                free(file_contents);
+            }
+        }
+
+        add_dir(dirs, dir_files, file_idx, dir_idx);
+        total_exercise_file_ct += exercise_file_ct;
+
+        for (int i = 0; i < file_idx; i++) {
+            free(dir_files[i].parent_dir_path);
+            free(dir_files[i].file_path);
+            free(dir_files[i].file_contents);
+            free(dir_files[i].file_name);
+            free(dir_files[i].file_name_no_ext);
+        }
+        free(dir_files);
+
+        dir_idx++;
+        free(nested_path);
+
+        for (int i = 0; i < ex_dirs_nested_ct; i++) {
+            free(nmlist_nested[i]);
+        }
+        free(nmlist_nested);
+    }
+
+    for (int di = 0; di < ex_dirs_ct; di++) {
+        free(nmlist[di]);
+    }
+    free(nmlist);
+
+    return total_exercise_file_ct;
+}
+@<exercise@>=
+Exercise *create_exercise(FileCollection *dirs) {
+    Exercise *exercise = malloc(sizeof(Exercise));
+
+    exercise->readme = get_readme(dirs);
+    exercise->exercise_files = get_exercises(dirs);
+
+    return exercise;
+}
+
+char* get_readme(FileCollection *dir) {
+    for (size_t f = 0; f < dir->file_ct; f++) {
+        FileType file_type = dir->files[f].file_type;
+        if (file_type == README) {
+            return dir->files[f].file_contents;
+        }
+    }
+    puts("error: no readme found in directory");
+    exit(1);
+}
+
+FileCollection* get_exercises(FileCollection *dir) {
+    FileCollection* result = malloc(sizeof(FileCollection));
+    if (result == NULL) {
+        perror("Failed to allocate memory for result");
+        exit(1);
+    }
+
+    result->files = NULL;
+    result->file_ct = 0;
+
+    for (size_t f = 0; f < dir->file_ct; f++) {
+        FileType file_type = dir->files[f].file_type;
+        if (file_type == EXERCISE) {
+            result->files = realloc(result->files, (result->file_ct + 1) * sizeof(File));
+            if (result->files == NULL) {
+                perror("Failed to realloc memory for get_exercises");
+                exit(1);
+            }
+
+            result->files[result->file_ct] = dir->files[f];
+            result->file_ct++;
+        }
+    }
+
+    return result;
+}
+@<display@>=
+void display(Exercise *exercise, ExecutionState *exercise_state, DisplayMode display_mode) {
+    switch (display_mode) {
+    case FAILURE:
+        display_progress(exercise_state->failing_file, exercise_state->total_files);
+        display_failure(exercise, exercise_state);
+        break;
+
+    case MARKED_INCOMPLETE:
+        display_progress(exercise_state->failing_file, exercise_state->total_files);
+        display_marked_incomplete(exercise, exercise_state);
+        break;
+
+    case COMPLETE:
+        display_success();
+        break;
+    }
+}
+
+@h Failure display, using indirection to select a function for communicating with the user.
+
+This function was the first "big one" I refactored after forking clings. I used what I knew, and jumbled together a refactor which only has a single branch of execution and determines the next step of computation to perform, and what verb to print, using indirection rather than duplicating code and using a simple if statement. This isn't a good example of good programming, it's a good example of over-complication, actually. There's absolutely no reason to abstract this area of the code. It was written as an exercise.
+=
+void display_failure(Exercise *exercise, ExecutionState *exercise_state) {
+    char *failure_type_verb[] = { "Execution", "Compilation" };
+    int (*failure_function[])(File) = { exec_run_output, exec_compile_output };
+
+    fprintf(text_bold(text_red(stdout)),
+            "⚠️ %s of %s failed! Please try again. Here's the output: \n\n",
+            failure_type_verb[exercise_state->failure_mode],
+            exercise->exercise_files->files[exercise_state->failing_file].file_path);
+    reset_colors(stdout);
+    (*failure_function[exercise_state->failure_mode])(exercise->exercise_files->files[exercise_state->failing_file]);
+}
+
+@h
+void display_marked_incomplete(Exercise *exercise, ExecutionState *exercise_state) {
+    File failed_file = exercise->exercise_files->files[exercise_state->failing_file];
+
+    char msg[] = ("1;34m1 | 0m// ❌ I AM NOT DONE\n"
+                  "1;34m2 | 0m\n"
+                  "1;34m3 | 0m\n");
+
+    printf("✅ \033[1;32mYou've completed exercise: %s \033[0m\n\n",
+           exercise->exercise_files->files[exercise_state->failing_file].file_path);
+    printf("😎 The code is compiling! 😎\n\n"
+
+           "Output: \n%s\n",
+           "==========================================");
+    exec_run_output(failed_file);
+    printf("==========================================\n"
+           "You can keep working on it for fun, or delete the commented line below in the\n"
+           "exercise file to proceed to the next exercise.\n"
+           "%s\n", msg);
+}
+
+void display_progress(int current_exercise, int total_exercises) {
+    int current_exercise_non_zero = current_exercise == 0 ? 1:current_exercise;
+    float progress = (float)current_exercise_non_zero / total_exercises;
+    char msg[300]; /* Previously, this was initialized as the null string for some odd reason. */
+
+    for (int ci = 0; ci < 50; ci++) {
+        float cip = (float)ci / 50;
+        if (cip * 100 <= progress * 100) {
+            strcat(msg, "█");
+        } else {
+            strcat(msg, "-");
+        }
+    }
+
+    fprintf(text_bold(stdout), "2J\rProgress: %s\n", msg);
+    reset_colors(stdout);
+}
+@h Congratulating the user on completing klingons
+
+The following small function, which is only so small thanks to some refactoring
+that I performed when I first looked into contributing to clings, simply
+congratulates the user for finishing all the exercises. Klingons, effectively,
+is a literate fork of clings without much (if any) new functionality; it is
+intended for thorough code review by an experienced C developer to gain
+constructive criticism on both my ability to hack on C code and my ability to
+communicate about it. The diff between klingons and clings may be small or
+large. I don't know yet. This paragraph will be rewritten later, of course.
+
+Danyo, the original author of clings, will be asked to criticize this code base
+and the prose within it, along with Tetsuo. This literate program is also an
+open letter to the C and ASM Developer discord, requesting that we do our best
+to be constructive learners and practitioners; this is an advanced human
+endeavour, and we should strive to be advanced; and other dumb platitudes.
+
+=
+void display_success() {
+    fputs(@<klingons logogram@>, text_bold(stdout));
+    fputs("Congratulations on completing klingons!", text_green(stdout));
+    reset_colors(stdout);
+}
+
+@h Debugging display
+
+The following display pattern is for when the klingons program is being debugged.
+
+=
+
+void display_debug(Exercise *exercise) {
+    for (size_t fi = 0; fi < exercise->exercise_files->file_ct; fi++) {
+        File exercise_file = exercise->exercise_files->files[fi];
+
+        printf("Exercise: %s | File type: %i | marked incomplete: %i | file diff "
+               "found: %i \n",
+               exercise_file.file_name, exercise_file.file_type,
+               exercise_file.marked_incomplete, exercise_file.file_diff);
+    }
+}

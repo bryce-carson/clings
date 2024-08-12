@@ -1,13 +1,15 @@
 /*
- * In programming, hardcoding numbers directly into your code 
- * (often referred to as "magic numbers") can make the code less 
+ * NOTE Chapter 1.3 of "The C Programming Language"
+ *
+ * In programming, hardcoding numbers directly into your code
+ * (often referred to as "magic numbers") can make the code less
  * understandable and harder to maintain.
  *
- * Using symbolic constants can help alleviate these issues by 
+ * Using symbolic constants can help alleviate these issues by
  * providing meaningful names for these numbers.
- * 
- * Below is a simple C program that prints a Fahrenheit-to-Celsius 
- * conversion table. The program currently uses magic numbers. 
+ *
+ * Below is a simple C program that prints a Fahrenheit-to-Celsius
+ * conversion table. The program currently uses magic numbers.
  * Your task is to refactor this program to use symbolic constants.
  *
  * Example macro definition:
@@ -21,21 +23,19 @@
 
 #include <stdio.h>
 
-// [TODO] DEFINE CONSTANTS LOWER, UPPER, AND STEP WITH APPROPRIATE VALUES.
-#define LOWER // lower limit of the table
-#define UPPER // upper limit of the table
-#define STEP  // step size between consecutive temperatures
-// END OF THE CONSTANTS
+/* [TODO] Redefine the integer constants in the main loop within the main
+ * function as symbolic constants LOWER, UPPER, and STEP with appropriate
+ * values, using the preprocessor directive for defining symbolic constants.
+ *
+ * This exercise is only completed when the preprocessor directives are defined
+ * correctly.
+ */
 
 int main() {
-	int fahr;
-
-	// [TODO] REPLACE THE MAGIC NUMBERS WITH THE SYMBOLIC CONSTANTS.
-	for (fahr = 0; fahr <= 300; fahr += 20) {
-	// END OF THE REPLACEMENT
+	// [TODO] replace the magic numbers with the symbolic constants.
+	for (int fahr = 0; fahr <= 300; fahr += 20) {
 		printf("%3d %6.1f\n", fahr, (5.0/9.0)*(fahr-32));
 	}
 
 	return 0;
 }
-
