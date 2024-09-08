@@ -1,10 +1,15 @@
-Title: klingons
-Author: Bryce Carson
-Purpose: The purpose of klingons, a fork of klingons, is to give me a useful base program to hack on until I really "get C." It also offers me a chance to learn yet another literate programming system, one that specifically groans about reinventing the wheel, but not so much as Noweb did when it refused to abandon ye olde UNIX® way of pipes and small, dedicated tooling pieced together to make something emergent and new.
-Language: C
+\title{klingons}
+\author{Bryce Carson}
+\begin{abstract}
+The purpose of klingons, a fork of clings, is to give me a useful base program
+to hack on until I really \"get C.\" It also offers me a chance to learn yet
+another literate programming system, one that specifically groans about
+reinventing the wheel, but not so much as Noweb did when it refused to abandon
+ye olde UNIX\registered{} way of pipes and small, dedicated tooling pieced
+together to make something emergent and new.
+\end{abstract}
 
-@
-@<klingons logogram@> =
+<<klingons logogram>>=
 "2J1;32m\n"
 "██╗  ██╗██╗     ██╗███╗   ██╗ ██████╗  ██████╗ ███╗   ██╗███████╗\n"
 "██║ ██╔╝██║     ██║████╗  ██║██╔════╝ ██╔═══██╗████╗  ██║██╔════╝\n"
@@ -12,14 +17,18 @@ Language: C
 "██╔═██╗ ██║     ██║██║╚██╗██║██║   ██║██║   ██║██║╚██╗██║╚════██║\n"
 "██║  ██╗███████╗██║██║ ╚████║╚██████╔╝╚██████╔╝██║ ╚████║███████║\n"
 "╚═╝  ╚═╝╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝\n\n"
+@ 
 
-@h Inclusions
+\section{Inclusions}
+These are the headers which are needed by this web. Non-standard header files
+are listed first; they exist in the \texttt{include} directory.
 
-These are the headers which are needed by this web. First the non-standard
-header files are given, which exist in the |include| directory until they are
-integrated into this web directly.
+Standard libraries can be read about in the manual pages by searching for their
+name within Emacs; at times the name of the manual differs, but the search term
+nonetheless returns the correct manual (e.g. ``dirent'', as a search term has
+``getdirentries'' as a completion candidate).
 
-=
+<<inclusions>>=(C)
 #include "termcolor-c.h"
 
 #include <dirent.h>
@@ -33,34 +42,38 @@ integrated into this web directly.
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+@ 
 
-@<includes@> Predeclaration of identifiers for ANSI C
+\section{Predeclarations of identifiers for ANSI C}
+ANSI C requires that identifiers be predeclared before their first usage in a file.
+This leads to a large amount of preamble in C programs,
+which is normally dealth with through the use of header files.
+I prefer headless files,
+which exist without headers and don't use a massive interconnected chain of |include| preprocessor directives.
+I like to define something a single time.
+Inweb benefits me in that it provides for avoiding predeclaration,
+but I won't use that utility yet.
+I'll only use Inweb's "paragraphing" feature (chunks or modules if you're coming from Noweb or CWEB) to predeclare identifiers a single time.
+Inweb has a definition feature,
+which can be used to declare macros,
+but I won't make much use of it.
 
-ANSI C requires that identifiers be predeclared before their first usage in a
-file. This leads to a large amount of "header". I prefer headless files, which
-exist without headers and don't use a massive interconnected chain of |include|
-preprocessor directives. I like to define something a single time. Inweb
-benefits me in that it provides for avoiding predeclaration, but I won't use
-that utility yet. I'll only use Inweb's "paragraphing" feature (chunks or
-modules if you're coming from Noweb or CWEB) to predeclare identifiers a single
-time.
+<<predeclarations>>=(C)
+#define BIN_PATH "./bin"
 
-@d BIN_PATH "./bin"
-
-=
 void delay(int seconds);
 
 int exec_cmd(char *command);
 int exec_cmd_output(char *command);
 
-/// compiles C file at path given with output and returns exit code
+/* compiles C file at path given with output and returns exit code */
 int exec_compile_output(File failed_file);
-/// compiles C file at path given with no output and returns exit code
+/* compiles C file at path given with no output and returns exit code */
 int exec_compile(char *file_path, char *file_name_no_ext);
 
-/// executes binary at a default location "./bin" expecting no file extension with command output and returns exit code
+/* executes binary at a default location "./bin" expecting no file extension with command output and returns exit code */
 int exec_run_output(File failed_file);
-/// executes binary at a default location "./bin" expecting no file extension with no output and returns exit code
+/* executes binary at a default location "./bin" expecting no file extension with no output and returns exit code */
 int exec_run(char *file_name_no_ext);
 
 int exec_clear_bin();
@@ -86,8 +99,8 @@ typedef struct {
     size_t file_ct;
 } FileCollection;
 
-/// This assumes that any path does not contain any dividers
-/// *base_path = "../" or "./" or "/" if needed, otherwise pass ""
+/* This assumes that any path does not contain any dividers
+   *base_path = "../" or "./" or "/" if needed, otherwise pass "" */
 char *build_file_path(char **paths, int size, char *base_path);
 char *read_file_contents(char *file_path);
 void add_dir(FileCollection **dirs, File *files, int file_ct, int dir_idx);
@@ -130,12 +143,21 @@ void display_failure(Exercise *exercise, ExecutionState *state);
 void display_success();
 void display_marked_incomplete(Exercise *exercise, ExecutionState *state);
 void display_progress(int current_exercise, int total_exercises);
+@ 
 
-@h Mainland programming
-|TOTAL_EXERCISES_DIRS| was formerly defined as the integer constant three, but I
- didn't see why this needed to be.
+\section{Mainland}
+\texttt{TOTAL_EXERCISES_DIRS} was formerly defined as the integer constant
+three, but I didn't see why this needed to be so I removed its initialization
+value.
 
-=
+With a few predeclarations preceeding the main function, a signal handler is
+associated with the interrupt signal, then the number of directories in
+``exercises'' is counted to establish the user's progress through the tutorials.
+
+<<main.c>>=(C)
+<<inclusions>>
+<<predeclarations>>
+
 int TOTAL_EXERCISES_DIRS;
 static volatile sig_atomic_t keep_running = 1;
 
@@ -362,8 +384,10 @@ void print_usage() {
            "\n",
            TOTAL_EXERCISES_DIRS);
 }
+@
 
-@<runna@>=
+\section{Exercise runner}
+<<runner>>=(C)
 const int MAX_LINES = 500;
 int exec_cmd(char *command) {
   FILE *fp;
@@ -489,30 +513,38 @@ int exec_run(char *file_name_no_ext) {
 
   free(file_path);
   return res_code;
-}
+  }
 
 int exec_clear_bin() {
-  char *command = malloc(14); // add 5 for binary path
-  snprintf(command, 14, "rm -r %s/*", BIN_PATH);
-    int res_code = exec_cmd(command);
+char *command = malloc(14); // add 5 for binary path
+snprintf(command, 14, "rm -r %s/*", BIN_PATH);
+int res_code = exec_cmd(command);
 
-  free(command);
-  return res_code;
+free(command);
+return res_code;
 }
 
-@<utils@>=
+@ 
 
+\section{Utilities}
+This very small section simply defines a utility function which is used
+elsewhere.
+
+<<utilities>>=(C)
 void delay(int seconds) {
-    int m_secs = 1000000 * seconds;
-    clock_t start_time = clock();
+int m_secs = 1000000 * seconds;
+clock_t start_time = clock();
 
-    while (clock() < start_time + m_secs) {};
+while (clock() < start_time + m_secs) {};
 }
 
-@<files@>Files and their conception within klingons
-This portion of the web defines a type |File| and |FileCollection| which is
-tailored to the specific needs of klingons.
-=
+@ 
+
+\section{Files}
+This portion of the web defines a type \texttt{File} and \texttt{FileCollection}
+which is tailored to the specific needs of klingons.
+
+<<files>>=(C)
 const char DIR_PATH[] = "./exercises";
 const int DIR_TYPE_CODE = 4;
 const int FILE_TYPE_CODE = 8;
@@ -816,7 +848,11 @@ int load_files(FileCollection **dirs) {
 
     return total_exercise_file_ct;
 }
-@<exercise@>=
+
+@
+
+\section{Exercises}
+<<exercises>>=(C)
 Exercise *create_exercise(FileCollection *dirs) {
     Exercise *exercise = malloc(sizeof(Exercise));
 
@@ -863,7 +899,11 @@ FileCollection* get_exercises(FileCollection *dir) {
 
     return result;
 }
-@<display@>=
+
+@ 
+
+\section{Display}
+<<display>>=(C)
 void display(Exercise *exercise, ExecutionState *exercise_state, DisplayMode display_mode) {
     switch (display_mode) {
     case FAILURE:
@@ -882,23 +922,26 @@ void display(Exercise *exercise, ExecutionState *exercise_state, DisplayMode dis
     }
 }
 
-@h Failure display, using indirection to select a function for communicating with the user.
+@ 
+
+\subsection{Failure display}
+Failure display, using indirection to select a function for communicating with the user.
 
 This function was the first "big one" I refactored after forking clings. I used what I knew, and jumbled together a refactor which only has a single branch of execution and determines the next step of computation to perform, and what verb to print, using indirection rather than duplicating code and using a simple if statement. This isn't a good example of good programming, it's a good example of over-complication, actually. There's absolutely no reason to abstract this area of the code. It was written as an exercise.
-=
-void display_failure(Exercise *exercise, ExecutionState *exercise_state) {
-    char *failure_type_verb[] = { "Execution", "Compilation" };
-    int (*failure_function[])(File) = { exec_run_output, exec_compile_output };
 
-    fprintf(text_bold(text_red(stdout)),
-            "⚠️ %s of %s failed! Please try again. Here's the output: \n\n",
-            failure_type_verb[exercise_state->failure_mode],
-            exercise->exercise_files->files[exercise_state->failing_file].file_path);
-    reset_colors(stdout);
-    (*failure_function[exercise_state->failure_mode])(exercise->exercise_files->files[exercise_state->failing_file]);
+<<failure display>>=(C)
+void display_failure(Exercise *exercise, ExecutionState *exercise_state) {
+char *failure_type_verb[] = { "Execution", "Compilation" };
+int (*failure_function[])(File) = { exec_run_output, exec_compile_output };
+
+fprintf(text_bold(text_red(stdout)),
+"⚠️ %s of %s failed! Please try again. Here's the output: \n\n",
+failure_type_verb[exercise_state->failure_mode],
+exercise->exercise_files->files[exercise_state->failing_file].file_path);
+reset_colors(stdout);
+(*failure_function[exercise_state->failure_mode])(exercise->exercise_files->files[exercise_state->failing_file]);
 }
 
-@h
 void display_marked_incomplete(Exercise *exercise, ExecutionState *exercise_state) {
     File failed_file = exercise->exercise_files->files[exercise_state->failing_file];
 
@@ -936,8 +979,9 @@ void display_progress(int current_exercise, int total_exercises) {
     fprintf(text_bold(stdout), "2J\rProgress: %s\n", msg);
     reset_colors(stdout);
 }
-@h Congratulating the user on completing klingons
+@ 
 
+\section{Congratulating the user on completing klingons}
 The following small function, which is only so small thanks to some refactoring
 that I performed when I first looked into contributing to clings, simply
 congratulates the user for finishing all the exercises. Klingons, effectively,
@@ -953,19 +997,19 @@ open letter to the C and ASM Developer discord, requesting that we do our best
 to be constructive learners and practitioners; this is an advanced human
 endeavour, and we should strive to be advanced; and other dumb platitudes.
 
-=
+<<congratulations>>=(C)
 void display_success() {
-    fputs(@<klingons logogram@>, text_bold(stdout));
+    fputs(<<klingons logogram>>, text_bold(stdout));
     fputs("Congratulations on completing klingons!", text_green(stdout));
     reset_colors(stdout);
 }
 
-@h Debugging display
+@ 
 
+\section{Debugging display}
 The following display pattern is for when the klingons program is being debugged.
 
-=
-
+<<debugging display>>=(C)
 void display_debug(Exercise *exercise) {
     for (size_t fi = 0; fi < exercise->exercise_files->file_ct; fi++) {
         File exercise_file = exercise->exercise_files->files[fi];
@@ -976,3 +1020,5 @@ void display_debug(Exercise *exercise) {
                exercise_file.marked_incomplete, exercise_file.file_diff);
     }
 }
+
+@ 
