@@ -1,7 +1,7 @@
-\title{klingons}
+\title{clingons}
 \author{Bryce Carson}
 \begin{abstract}
-The purpose of klingons, a fork of clings, is to give me a useful base program
+The purpose of clingons, a fork of clings, is to give me a useful base program
 to hack on until I really \"get C.\" It also offers me a chance to learn yet
 another literate programming system, one that specifically groans about
 reinventing the wheel, but not so much as Noweb did when it refused to abandon
@@ -9,14 +9,36 @@ ye olde UNIX\registered{} way of pipes and small, dedicated tooling pieced
 together to make something emergent and new.
 \end{abstract}
 
-<<klingons logogram>>=
+<<clingons logogram>>=
 "2J1;32m\n"
-"██╗  ██╗██╗     ██╗███╗   ██╗ ██████╗  ██████╗ ███╗   ██╗███████╗\n"
-"██║ ██╔╝██║     ██║████╗  ██║██╔════╝ ██╔═══██╗████╗  ██║██╔════╝\n"
-"█████╔╝ ██║     ██║██╔██╗ ██║██║  ███╗██║   ██║██╔██╗ ██║███████╗\n"
-"██╔═██╗ ██║     ██║██║╚██╗██║██║   ██║██║   ██║██║╚██╗██║╚════██║\n"
-"██║  ██╗███████╗██║██║ ╚████║╚██████╔╝╚██████╔╝██║ ╚████║███████║\n"
-"╚═╝  ╚═╝╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝\n\n"
+" ██████╗██╗     ██╗███╗   ██╗ ██████╗  ██████╗ ███╗   ██╗███████╗\n"
+"██╔════╝██║     ██║████╗  ██║██╔════╝ ██╔═══██╗████╗  ██║██╔════╝\n"
+"██║     ██║     ██║██╔██╗ ██║██║  ███╗██║   ██║██╔██╗ ██║███████╗\n"
+"██║     ██║     ██║██║╚██╗██║██║   ██║██║   ██║██║╚██╗██║╚════██║\n"
+"╚██████╗███████╗██║██║ ╚████║╚██████╔╝╚██████╔╝██║ ╚████║███████║\n"
+" ╚═════╝╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝\n\n"
+@ 
+
+\section{Preamble and application structure}
+I find it helpful to include, somewhere in the web, a top-down definition which
+serves as a table of contents of the entire file being defined. This file
+should, ideally, be the only file unless you're writing a module. An application
+should be one web.
+
+%% TODO: reorganize these chunks into higher-level chunks, so that only "display" and "exercises" are other categories.
+<<clingons.c>>=(C)
+/*
+ * © 2024 Bryce Carson
+ * Based off of work © Dan Nelson
+ */
+<<inclusions>>
+
+<<predeclarations>>
+
+/* APPLICATION LOOP: enter, exercise?, quit */
+<<main>>
+
+<<function definitions>>
 @ 
 
 \section{Inclusions}
@@ -45,18 +67,24 @@ nonetheless returns the correct manual (e.g. ``dirent'', as a search term has
 @ 
 
 \section{Predeclarations of identifiers for ANSI C}
-ANSI C requires that identifiers be predeclared before their first usage in a file.
-This leads to a large amount of preamble in C programs,
-which is normally dealth with through the use of header files.
-I prefer headless files,
-which exist without headers and don't use a massive interconnected chain of |include| preprocessor directives.
-I like to define something a single time.
-Inweb benefits me in that it provides for avoiding predeclaration,
-but I won't use that utility yet.
-I'll only use Inweb's "paragraphing" feature (chunks or modules if you're coming from Noweb or CWEB) to predeclare identifiers a single time.
-Inweb has a definition feature,
-which can be used to declare macros,
-but I won't make much use of it.
+ANSI C requires that identifiers be predeclared before their first usage in a
+file. This leads to a large amount of preamble in C programs, which is normally
+dealth with through the use of header files. I prefer headless files, which
+exist without headers and don't use a massive interconnected chain of |include|
+preprocessor directives. I like to define something a single time. Inweb
+benefits me in that it provides for avoiding predeclaration, but I won't use
+that utility yet. I'll only use Inweb's "paragraphing" feature (chunks or
+modules if you're coming from Noweb or CWEB) to predeclare identifiers a single
+time. Inweb has a definition feature, which can be used to declare macros, but I
+won't make much use of it.
+
+The location whereo compiled binaries are located is set to the constant
+location ``bin'', for binary file, and does not change throughout the run of the
+application.
+
+% TODO: what is delay used for? How are exec command and its related output, and
+% compile and its related output, and run and its related output, and clear bin,
+% used?
 
 <<predeclarations>>=(C)
 #define BIN_PATH "./bin"
@@ -94,16 +122,17 @@ typedef struct {
     FileType file_type;
 } File;
 
+/* TODO: files is actually an array, yeah? */
 typedef struct {
     File *files;
-    size_t file_ct;
+    size_t filec;
 } FileCollection;
 
 /* This assumes that any path does not contain any dividers
    *base_path = "../" or "./" or "/" if needed, otherwise pass "" */
 char *build_file_path(char **paths, int size, char *base_path);
 char *read_file_contents(char *file_path);
-void add_dir(FileCollection **dirs, File *files, int file_ct, int dir_idx);
+void add_dir(FileCollection **dirs, File *files, int filec, int dir_idx);
 int load_files(FileCollection **dirs);
 bool is_marked_incomplete(char *file_contents, int file_contents_size);
 int alphasort(const struct dirent **a, const struct dirent **b);
@@ -143,9 +172,25 @@ void display_failure(Exercise *exercise, ExecutionState *state);
 void display_success();
 void display_marked_incomplete(Exercise *exercise, ExecutionState *state);
 void display_progress(int current_exercise, int total_exercises);
+
+void exec_exercise(Exercise *exercise, ExecutionState *state);
+FailureMode find_failure_mode(char *file_path, char *file_name_no_ext);
+bool is_file_diff(Exercise *exercise);
+
+void print_usage();
+int count_dir(char *dir);
+
+<<signal handling>>
 @ 
 
-\section{Mainland}
+\section{Exercises (main)}
+The main program compiles filesets using the system C compiler and tests if the
+compilation was successful, possibly testing the output. Each fileset is an
+``exercise'', which tests the user's ability to answer the programming questions
+based on the exercises in
+% MAYBE FIXME: is this the correct book?
+\em{The C Programming Book}.
+
 \texttt{TOTAL_EXERCISES_DIRS} was formerly defined as the integer constant
 three, but I didn't see why this needed to be so I removed its initialization
 value.
@@ -154,25 +199,22 @@ With a few predeclarations preceeding the main function, a signal handler is
 associated with the interrupt signal, then the number of directories in
 ``exercises'' is counted to establish the user's progress through the tutorials.
 
-<<main.c>>=(C)
-<<inclusions>>
-<<predeclarations>>
+The standard argument list is used in the main program, where [argc] is the
+count of arguments passed to the program by the caller, and [argv] is an array
+of pointers to characters (which can also be thought of as a pointer to a
+pointer to a character, but denoting [argv[]] ensures that the reader knows they
+can safely increment the pointer if they use that syntax rather than using the
+indexing operator \texttt{[}.
 
-int TOTAL_EXERCISES_DIRS;
-static volatile sig_atomic_t keep_running = 1;
+<<standard arguments>>=(C)
+int argc, char *argv[]
+@ 
 
-void exec_exercise(Exercise *exercise, ExecutionState *state);
-FailureMode find_failure_mode(char *file_path, char *file_name_no_ext);
-bool is_file_diff(Exercise *exercise);
-
-static void sig_handler(int _);
-void print_usage();
-int count_dir(char *dir);
-
-int main(int argc, char *argv[]) {
+<<main>>=(C)>>
+int main(<<standard arguments>>) {
     signal(SIGINT, sig_handler);
 
-    TOTAL_EXERCISES_DIRS = count_dir("./exercises");
+    int TOTAL_EXERCISES_DIRS = count_dir("./exercises");
     if (TOTAL_EXERCISES_DIRS == -1) {
         return 1;
     }
@@ -180,9 +222,15 @@ int main(int argc, char *argv[]) {
     int start_at = 1;
     int c;
 
+		/* From the getopt(3) manual:
+		 * If the caller has set the global variable opterr to zero, then getopt()
+		 * does not print an error message. The caller can determine that there was
+		 * an error by testing whether the function return value is '?'. (By
+		 * default, opterr has a nonzero value.)
+		 */
     opterr = 0;
 
-    while ((c = getopt(argc, argv, "s:")) != -1) {
+    while ((c = getopt(argc, argv, "s:")) != '?') {
         switch (c) {
         case 's':
             start_at = atoi(optarg);
@@ -219,76 +267,11 @@ int main(int argc, char *argv[]) {
         dirs[i] = NULL;
     }
 
-    while (keep_running) {
-        delay(1);
-
-        int exercise_file_ct = load_files(dirs);
-        exercise_state.total_files = exercise_file_ct;
-
-        for (int d = (start_at - 1); d < TOTAL_EXERCISES_DIRS; d++) {
-            Exercise *exercise = create_exercise(dirs[d]);
-            bool file_diff = is_file_diff(exercise);
-
-#ifdef DEBUG
-            display_debug(&exercise);
-            continue;
-#endif
-
-            if (rerun_all == true) {
-                exec_exercise(exercise, &exercise_state);
-
-                if (exercise_state.failure_mode != NONE) {
-                    display(exercise, &exercise_state, FAILURE);
-                    rerun_all = false;
-                    goto clean_exercise;
-                }
-
-                if (exercise_state.failure_mode == NONE &&
-                    exercise_state.marked_incomplete == true) {
-                    display(exercise, &exercise_state, MARKED_INCOMPLETE);
-                    rerun_all = false;
-                    goto clean_exercise;
-                }
-
-                // end of exercises, no failures
-                if (d == TOTAL_EXERCISES_DIRS - 1) {
-                    display(exercise, &exercise_state, COMPLETE);
-                    rerun_all = false;
-                }
-            }
-
-            if (file_diff == true) {
-                exec_exercise(exercise, &exercise_state);
-
-                if (exercise_state.failure_mode != NONE) {
-                    display(exercise, &exercise_state, FAILURE);
-                    rerun_all = false;
-                    goto clean_exercise;
-                }
-
-                if (exercise_state.failure_mode == NONE &&
-                    exercise_state.marked_incomplete == true) {
-                    display(exercise, &exercise_state, MARKED_INCOMPLETE);
-                    rerun_all = false;
-                    goto clean_exercise;
-                }
-
-                if (exercise_state.failure_mode == NONE &&
-                    exercise_state.marked_incomplete == false) {
-                    rerun_all = true;
-                }
-            }
-
-        clean_exercise:
-            free(exercise->exercise_files->files);
-            free(exercise->exercise_files);
-            free(exercise);
-        }
-    }
+		<<main loop>>
 
     for (int di = 0; di < TOTAL_EXERCISES_DIRS; di++) {
         if (dirs[di]) {
-            for (size_t e = 0; e < dirs[di]->file_ct; e++) {
+            for (size_t e = 0; e < dirs[di]->filec; e++) {
                 free(dirs[di]->files[e].file_path);
                 free(dirs[di]->files[e].file_name);
                 free(dirs[di]->files[e].file_name_no_ext);
@@ -305,11 +288,113 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+@
+
+\section{Main loop}
+<<main loop>>=(C)
+while (keep_running) {
+		delay(1);
+
+		int exercise_file_count = load_files(dirs);
+		exercise_state.total_files = exercise_file_count;
+
+		for (int d = (start_at - 1); d < TOTAL_EXERCISES_DIRS; d++) {
+				Exercise *exercise = create_exercise(dirs[d]);
+				bool file_diff = is_file_diff(exercise);
+
+#ifdef DEBUG
+				display_debug(&exercise);
+				continue;
+#endif
+
+				if (rerun_all == true) {
+						exec_exercise(exercise, &exercise_state);
+
+						if (exercise_state.failure_mode != NONE) {
+								display(exercise, &exercise_state, FAILURE);
+								rerun_all = false;
+								goto clean_exercise;
+						}
+
+						if (exercise_state.failure_mode == NONE &&
+								exercise_state.marked_incomplete == true) {
+								display(exercise, &exercise_state, MARKED_INCOMPLETE);
+								rerun_all = false;
+								goto clean_exercise;
+						}
+
+						// end of exercises, no failures
+						if (d == TOTAL_EXERCISES_DIRS - 1) {
+								display(exercise, &exercise_state, COMPLETE);
+								rerun_all = false;
+						}
+				}
+
+				if (file_diff == true) {
+						exec_exercise(exercise, &exercise_state);
+
+						if (exercise_state.failure_mode != NONE) {
+								display(exercise, &exercise_state, FAILURE);
+								rerun_all = false;
+								goto clean_exercise;
+						}
+
+						if (exercise_state.failure_mode == NONE &&
+								exercise_state.marked_incomplete == true) {
+								display(exercise, &exercise_state, MARKED_INCOMPLETE);
+								rerun_all = false;
+								goto clean_exercise;
+						}
+
+						if (exercise_state.failure_mode == NONE &&
+								exercise_state.marked_incomplete == false) {
+								rerun_all = true;
+						}
+				}
+
+		clean_exercise:
+				free(exercise->exercise_files->files);
+				free(exercise->exercise_files);
+				free(exercise);
+		}
+}
+@ 
+
+\section{Signals}
+<<signal handling>>=(C)
+static volatile sig_atomic_t keep_running = 1;
+static void sig_handler(int _);
+@ 
+
+\section{Function definitions}
+There is some debate among C programmers as to where in a ``main function file''
+the definitions should be placed. Literate programming deviates from structured
+programming languages in enabling programs to be written in any order.
+
+<<function definitions>>=(C)
+/* EXERCISES */
+<<exercise-related functions>>
+
+/* PROCESS CONTROL */
+<<runner>>
+<<utilities>>
+
+/* FILE IO */
+<<files>>
+<<exercises>>
+
+/* SCREEN OUTPUT */
+<<display>>
+<<failure display>>
+<<debugging display>>
+@
+
+<<exercise-related function>>=(C)
 void exec_exercise(Exercise *exercise, ExecutionState *exercise_state) {
-    int file_ct = exercise->exercise_files->file_ct;
+    int filec = exercise->exercise_files->filec;
     File *files = exercise->exercise_files->files;
 
-    for (int e = 0; e < file_ct; e++) {
+    for (int e = 0; e < filec; e++) {
         File file = files[e];
         char *file_name_no_ext = file.file_name_no_ext;
         char *file_path = file.file_path;
@@ -337,11 +422,11 @@ FailureMode find_failure_mode(char *file_path, char *file_name_no_ext) {
 }
 
 bool is_file_diff(Exercise *exercise) {
-    int file_ct = exercise->exercise_files->file_ct;
+    int filec = exercise->exercise_files->filec;
     File *files = exercise->exercise_files->files;
     bool is_file_diff = false;
 
-    for (int e = 0; e < file_ct; e++) {
+    for (int e = 0; e < filec; e++) {
         File file = files[e];
         bool file_diff = file.file_diff;
         if (file_diff == true) {
@@ -384,7 +469,8 @@ void print_usage() {
            "\n",
            TOTAL_EXERCISES_DIRS);
 }
-@
+
+@ 
 
 \section{Exercise runner}
 <<runner>>=(C)
@@ -542,7 +628,7 @@ while (clock() < start_time + m_secs) {};
 
 \section{Files}
 This portion of the web defines a type \texttt{File} and \texttt{FileCollection}
-which is tailored to the specific needs of klingons.
+which is tailored to the specific needs of clingons.
 
 <<files>>=(C)
 const char DIR_PATH[] = "./exercises";
@@ -623,12 +709,12 @@ bool is_marked_incompleted(char *file_contents, int file_contents_size) {
     return false;
 }
 
-void add_dir(FileCollection **dirs, File *files, int file_ct, int dir_idx) {
+void add_dir(FileCollection **dirs, File *files, int filec, int dir_idx) {
 
     // Free dir if not null
     if (dirs[dir_idx] != NULL) {
         if (dirs[dir_idx]->files != NULL) {
-            for (size_t e = 0; e < dirs[dir_idx]->file_ct; e++) {
+            for (size_t e = 0; e < dirs[dir_idx]->filec; e++) {
                 free(dirs[dir_idx]->files[e].file_path);
                 free(dirs[dir_idx]->files[e].file_name);
                 free(dirs[dir_idx]->files[e].file_name_no_ext);
@@ -646,26 +732,24 @@ void add_dir(FileCollection **dirs, File *files, int file_ct, int dir_idx) {
         exit(1);
     }
 
-    dirs[dir_idx]->files = malloc(sizeof(File) * file_ct);
+    dirs[dir_idx]->files = malloc(sizeof(File) * filec);
     if (dirs[dir_idx]->files == NULL) {
         perror("Failed to allocate memory for files in dir");
         exit(1);
     }
 
-    for (int i = 0; i < file_ct; i++) {
-        dirs[dir_idx]->files[i].file_path = strdup(files[i].file_path);
-        dirs[dir_idx]->files[i].file_name = strdup(files[i].file_name);
-        dirs[dir_idx]->files[i].file_name_no_ext =
-            strdup(files[i].file_name_no_ext);
-        dirs[dir_idx]->files[i].parent_dir_path =
-            strdup(files[i].parent_dir_path);
-        dirs[dir_idx]->files[i].file_contents = strdup(files[i].file_contents);
-        dirs[dir_idx]->files[i].file_type = files[i].file_type;
+    for (int i = 0; i < filec; i++) {
+        dirs[dir_idx]->files[i].file_path					= strdup(files[i].file_path);
+        dirs[dir_idx]->files[i].file_name					= strdup(files[i].file_name);
+        dirs[dir_idx]->files[i].file_name_no_ext	= strdup(files[i].file_name_no_ext);
+        dirs[dir_idx]->files[i].parent_dir_path		= strdup(files[i].parent_dir_path);
+        dirs[dir_idx]->files[i].file_contents			= strdup(files[i].file_contents);
+        dirs[dir_idx]->files[i].file_type					= files[i].file_type;
         dirs[dir_idx]->files[i].marked_incomplete = files[i].marked_incomplete;
-        dirs[dir_idx]->files[i].file_diff = files[i].file_diff;
+        dirs[dir_idx]->files[i].file_diff					= files[i].file_diff;
     }
 
-    dirs[dir_idx]->file_ct = file_ct;
+    dirs[dir_idx]->filec = filec;
 }
 
 int alphasort(const struct dirent **a, const struct dirent **b) {
@@ -697,7 +781,7 @@ int load_files(FileCollection **dirs) {
     }
 
     int dir_idx = 0;
-    int total_exercise_file_ct = 0;
+    int total_exercise_file_count = 0;
 
     for (int di = 0; di < ex_dirs_ct; di++) {
         struct dirent *de = nmlist[di];
@@ -723,7 +807,7 @@ int load_files(FileCollection **dirs) {
         }
 
         int file_idx = 0;
-        int exercise_file_ct = 0;
+        int exercise_file_count = 0;
         File *dir_files = NULL;
 
         for (int ndi = 0; ndi < ex_dirs_nested_ct; ndi++) {
@@ -779,7 +863,7 @@ int load_files(FileCollection **dirs) {
 
                     dir_files[file_idx].marked_incomplete = marked_complete;
 
-                    exercise_file_ct++;
+                    exercise_file_count++;
                 } else if (file_type == README) {
                     dir_files[file_idx].marked_incomplete = false;
                 } else {
@@ -821,7 +905,7 @@ int load_files(FileCollection **dirs) {
         }
 
         add_dir(dirs, dir_files, file_idx, dir_idx);
-        total_exercise_file_ct += exercise_file_ct;
+        total_exercise_file_count += exercise_file_count;
 
         for (int i = 0; i < file_idx; i++) {
             free(dir_files[i].parent_dir_path);
@@ -846,12 +930,12 @@ int load_files(FileCollection **dirs) {
     }
     free(nmlist);
 
-    return total_exercise_file_ct;
+    return total_exercise_file_count;
 }
 
 @
 
-\section{Exercises}
+\section{exercises}
 <<exercises>>=(C)
 Exercise *create_exercise(FileCollection *dirs) {
     Exercise *exercise = malloc(sizeof(Exercise));
@@ -863,7 +947,7 @@ Exercise *create_exercise(FileCollection *dirs) {
 }
 
 char* get_readme(FileCollection *dir) {
-    for (size_t f = 0; f < dir->file_ct; f++) {
+    for (size_t f = 0; f < dir->filec; f++) {
         FileType file_type = dir->files[f].file_type;
         if (file_type == README) {
             return dir->files[f].file_contents;
@@ -881,19 +965,19 @@ FileCollection* get_exercises(FileCollection *dir) {
     }
 
     result->files = NULL;
-    result->file_ct = 0;
+    result->filec = 0;
 
-    for (size_t f = 0; f < dir->file_ct; f++) {
+    for (size_t f = 0; f < dir->filec; f++) {
         FileType file_type = dir->files[f].file_type;
         if (file_type == EXERCISE) {
-            result->files = realloc(result->files, (result->file_ct + 1) * sizeof(File));
+            result->files = realloc(result->files, (result->filec + 1) * sizeof(File));
             if (result->files == NULL) {
                 perror("Failed to realloc memory for get_exercises");
                 exit(1);
             }
 
-            result->files[result->file_ct] = dir->files[f];
-            result->file_ct++;
+            result->files[result->filec] = dir->files[f];
+            result->filec++;
         }
     }
 
@@ -902,8 +986,8 @@ FileCollection* get_exercises(FileCollection *dir) {
 
 @ 
 
-\section{Display}
-<<display>>=(C)
+\section{display}
+<<display>>=(c)
 void display(Exercise *exercise, ExecutionState *exercise_state, DisplayMode display_mode) {
     switch (display_mode) {
     case FAILURE:
@@ -917,7 +1001,9 @@ void display(Exercise *exercise, ExecutionState *exercise_state, DisplayMode dis
         break;
 
     case COMPLETE:
-        display_success();
+				fputs(<<clingons logogram>>, text_bold(stdout));
+				fputs("Congratulations on completing clingons!", text_green(stdout));
+				reset_colors(stdout);
         break;
     }
 }
@@ -981,37 +1067,39 @@ void display_progress(int current_exercise, int total_exercises) {
 }
 @ 
 
-\section{Congratulating the user on completing klingons}
+\section{Congratulating the user on completing clingons}
+% TODO: rewrite the following section, given the function was in-lined.
 The following small function, which is only so small thanks to some refactoring
 that I performed when I first looked into contributing to clings, simply
-congratulates the user for finishing all the exercises. Klingons, effectively,
-is a literate fork of clings without much (if any) new functionality; it is
-intended for thorough code review by an experienced C developer to gain
-constructive criticism on both my ability to hack on C code and my ability to
-communicate about it. The diff between klingons and clings may be small or
-large. I don't know yet. This paragraph will be rewritten later, of course.
+congratulates the user for finishing all the exercises. Clingons, effectively,
+is a literate fork of clings without much (if any) new functionality.
+
+The purpose in writing Clingons was to gain constructive criticism from thorough
+``code review'' by an experienced C developer on both my ability to hack on
+existing C code and my ability to communicate in terms more experienced
+developers will understand. The differences between clingons and clings may be
+small or large in the end. At the time of writing this paragraph I don't know.
 
 Danyo, the original author of clings, will be asked to criticize this code base
 and the prose within it, along with Tetsuo. This literate program is also an
-open letter to the C and ASM Developer discord, requesting that we do our best
-to be constructive learners and practitioners; this is an advanced human
-endeavour, and we should strive to be advanced; and other dumb platitudes.
+open letter to the C and ASM Developer Discord server, requesting that we do our
+best to be constructive learners and practitioners, and to promote literate
+programming and the use of meaningful identifiers and abbreviations therein.
 
-<<congratulations>>=(C)
-void display_success() {
-    fputs(<<klingons logogram>>, text_bold(stdout));
-    fputs("Congratulations on completing klingons!", text_green(stdout));
-    reset_colors(stdout);
-}
-
-@ 
+As an example, in my literate refactoring of clings into Clingons, I found an
+identifier I didn't understand quite readily enough. I didn't like ``ct'' as an
+abbreviation of ``count''. I think it's not good, especially since it can be
+confused for existing initialisms like creation time which is used in Linux file
+attributes. ``c'' is an existing abbreviation for ``count'' in C programming
+(i.e., [argc] is very common, so [filec] could be readily understood as ``file
+count''). Follow convention when available and appropriate.
 
 \section{Debugging display}
-The following display pattern is for when the klingons program is being debugged.
+The following display pattern is for when the clingons program is being debugged.
 
 <<debugging display>>=(C)
 void display_debug(Exercise *exercise) {
-    for (size_t fi = 0; fi < exercise->exercise_files->file_ct; fi++) {
+    for (size_t fi = 0; fi < exercise->exercise_files->filec; fi++) {
         File exercise_file = exercise->exercise_files->files[fi];
 
         printf("Exercise: %s | File type: %i | marked incomplete: %i | file diff "
