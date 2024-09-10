@@ -9,8 +9,12 @@ ye olde UNIX\registered{} way of pipes and small, dedicated tooling pieced
 together to make something emergent and new.
 \end{abstract}
 
+<<␛>>=
+
+@ 
+
 <<clingons logogram>>=
-"2J1;32m\n"
+"<<␛>>2J<<␛>>1;32m\n"
 " ██████╗██╗     ██╗███╗   ██╗ ██████╗  ██████╗ ███╗   ██╗███████╗\n"
 "██╔════╝██║     ██║████╗  ██║██╔════╝ ██╔═══██╗████╗  ██║██╔════╝\n"
 "██║     ██║     ██║██╔██╗ ██║██║  ███╗██║   ██║██╔██╗ ██║███████╗\n"
@@ -25,7 +29,8 @@ serves as a table of contents of the entire file being defined. This file
 should, ideally, be the only file unless you're writing a module. An application
 should be one web.
 
-%% TODO: reorganize these chunks into higher-level chunks, so that only "display" and "exercises" are other categories.
+%% TODO: reorganize these chunks into higher-level chunks, so that only
+%% "display" and "exercises" are other categories.
 <<clingons.c>>=(C)
 /*
  * © 2024 Bryce Carson
@@ -1031,9 +1036,9 @@ reset_colors(stdout);
 void display_marked_incomplete(Exercise *exercise, ExecutionState *exercise_state) {
     File failed_file = exercise->exercise_files->files[exercise_state->failing_file];
 
-    char msg[] = ("1;34m1 | 0m// ❌ I AM NOT DONE\n"
-                  "1;34m2 | 0m\n"
-                  "1;34m3 | 0m\n");
+    char msg[] = ("<<␛>>1;34m1 | <<␛>>0m// ❌ I AM NOT DONE\n"
+                  "<<␛>>1;34m2 | <<␛>>0m\n"
+                  "<<␛>>1;34m3 | <<␛>>0m\n");
 
     printf("✅ \033[1;32mYou've completed exercise: %s \033[0m\n\n",
            exercise->exercise_files->files[exercise_state->failing_file].file_path);
@@ -1062,7 +1067,7 @@ void display_progress(int current_exercise, int total_exercises) {
         }
     }
 
-    fprintf(text_bold(stdout), "2J\rProgress: %s\n", msg);
+    fprintf(text_bold(stdout), "<<␛>>2J\rProgress: %s\n", msg);
     reset_colors(stdout);
 }
 @ 
